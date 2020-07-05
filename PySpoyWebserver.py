@@ -20,7 +20,7 @@ class PySpoyServer(http.server.BaseHTTPRequestHandler):
                 site = "Failed to read your authentication code!"
                 print("Failure to read the code")
         else:
-            site = "Spotify is being wired and send a wrong redirect"
+            site = "Spotify is being weird and send a wrong redirect"
             self.send_response(404)
             print("Not an end point!")
         self.end_headers()
