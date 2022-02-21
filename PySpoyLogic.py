@@ -65,8 +65,8 @@ class PySpoy():
  
         #TODO: make UI for this and load from file
         self.keybind = {"Play/Pause": ([{keyboard.Key.alt_gr, keyboard.Key.ctrl_l, keyboard.Key.up}, {keyboard.Key.alt_gr, keyboard.Key.up}, {keyboard.Key.alt_r, keyboard.Key.ctrl_l, keyboard.Key.up}, {keyboard.Key.alt, keyboard.Key.ctrl, keyboard.Key.up}], self.playPause),
-        "SkipTrack": ([{keyboard.Key.alt_gr, keyboard.Key.ctrl_l, keyboard.Key.left}, {keyboard.Key.alt_gr, keyboard.Key.left}, {keyboard.Key.alt_r, keyboard.Key.ctrl_l, keyboard.Key.left}], self.skip_song), 
-        "PreviousTrack": ([{keyboard.Key.alt_gr, keyboard.Key.ctrl_l, keyboard.Key.right}, {keyboard.Key.alt_gr, keyboard.Key.right}, {keyboard.Key.alt_r, keyboard.Key.ctrl_l, keyboard.Key.right}], self.prev_song), 
+        "PreviousTrack": ([{keyboard.Key.alt_gr, keyboard.Key.ctrl_l, keyboard.Key.left}, {keyboard.Key.alt_gr, keyboard.Key.left}, {keyboard.Key.alt_r, keyboard.Key.ctrl_l, keyboard.Key.left}, {keyboard.Key.alt, keyboard.Key.ctrl, keyboard.Key.left}], self.prev_song), 
+        "SkipTrack": ([{keyboard.Key.alt_gr, keyboard.Key.ctrl_l, keyboard.Key.right}, {keyboard.Key.alt_gr, keyboard.Key.right}, {keyboard.Key.alt_r, keyboard.Key.ctrl_l, keyboard.Key.right}, {keyboard.Key.alt, keyboard.Key.ctrl, keyboard.Key.right}], self.skip_song), 
         "Quit": ([{keyboard.Key.shift, keyboard.Key.esc}], self.quit)}
 
         self.cur_key = set()
