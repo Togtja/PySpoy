@@ -1,7 +1,10 @@
 import os, json, webbrowser, threading #Default lib
-import base64, time, urllib.parse, math
-import requests #External libs
-from pynput import keyboard 
+import base64, time, math, random
+import requests, hashlib #External libs
+from pynput import keyboard
+from string import ascii_letters
+
+from urllib import parse
 
 import PySpoyWebserver as webserver# Own lib
 
@@ -18,10 +21,25 @@ class PySpoy():
         self.player_url = "https://api.spotify.com/v1/me/player/"
         with open(".config") as conf_file:
             self.clientID = conf_file.read()
+        
         self.current_r = requests.Session()
-        self.rederect = "http://localhost:"+ str(webserver.PORT)
-        self.access = "user-modify-playback-state%20user-read-currently-playing%20user-read-playback-state"
-        self.auth_url = "https://accounts.spotify.com/authorize?client_id="+ self.clientID + "&response_type=code&redirect_uri=" + urllib.parse.quote(self.rederect) +"&scope=" + self.access
+        self.redirect = "http://localhost:"+ str(webserver.PORT)
+        self.access = "user-modify-playback-state user-read-currently-playing user-read-playback-state"
+        
+        self.state = "".join(random.choices(ascii_letters, k=16))
+        self.verifier = "".join(random.choices("QWERTYUIOPASDFGHJKLZXCVBNMqwertyuiopasdfghjklzxcvbnm0123456789-._~", k=random.randint(43,128)))
+        self.challenge = base64.b64encode(hashlib.sha256(self.verifier.encode()).digest()).decode("ascii").replace("=","").replace("+","-").replace("/","_")
+        payload_auth_req = {
+            "response_type": 'code',
+            "client_id": self.clientID,
+            "scope": self.access,
+            "redirect_uri": self.redirect,
+            "state": self.state,
+            "code_challenge_method": "S256",
+            "code_challenge": self.challenge
+        }
+        self.auth_url = "https://accounts.spotify.com/authorize?" + parse.urlencode(payload_auth_req)
+        print(parse.urlencode(payload_auth_req))
         #Start a server for the authentication token
         try:
             t = threading.Thread(target=webserver.runServer, daemon=True)
@@ -32,20 +50,19 @@ class PySpoy():
         webbrowser.open(self.auth_url)
         
         timeout = 60 #Give users 1 minute to authenticate the app
-        while(not os.path.exists(webserver.FILE)):
+        while not os.path.exists(webserver.FILE):
             time.sleep(1)
             timeout -= 1
-            if timeout > 0:
+            if timeout < 0:
                 #TODO: Give a good error to user!
                 break
-        
         with open(webserver.FILE, "r") as f:
             self.authToken = f.read()
         os.remove(webserver.FILE)
         webserver.closeServer()
-
+        
         self.get_access_token()
-
+ 
         #TODO: make UI for this and load from file
         self.keybind = {"Play/Pause": ([{keyboard.Key.alt_gr, keyboard.Key.ctrl_l, keyboard.Key.up}, {keyboard.Key.alt_gr, keyboard.Key.up}, {keyboard.Key.alt_r, keyboard.Key.ctrl_l, keyboard.Key.up}, {keyboard.Key.alt, keyboard.Key.ctrl, keyboard.Key.up}], self.playPause),
         "SkipTrack": ([{keyboard.Key.alt_gr, keyboard.Key.ctrl_l, keyboard.Key.left}, {keyboard.Key.alt_gr, keyboard.Key.left}, {keyboard.Key.alt_r, keyboard.Key.ctrl_l, keyboard.Key.left}], self.skip_song), 
@@ -54,20 +71,28 @@ class PySpoy():
 
         self.cur_key = set()
         with keyboard.Listener(on_press=self.on_press, on_release=self.on_release) as l1:
-            l1.join()
+            try:
+                l1.join()
+            except Exception as e:
+                print("Exception", e)
 
     #TODO: Send clientID and secret as encoded64 
+    
     def get_access_token(self):
         payload = {
             "grant_type": "authorization_code",
             "code": self.authToken,
-            "redirect_uri" : self.rederect,
+            "redirect_uri" : self.redirect,
             "client_id":     self.clientID,
-            "client_secret": "secret!"
+            "code_verifier": self.verifier
         }
 
         res = self.current_r.post("https://accounts.spotify.com/api/token", data=payload)
         res_json = res.json()
+        print(res_json)
+        if "error" in res_json:
+            print(res_json["error"])
+            return
         self.access_token = res_json["access_token"]
         self.token_timer = res_json["expires_in"]
         self.token_type = res_json["token_type"]

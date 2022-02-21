@@ -1,4 +1,5 @@
-import http.server
+import http.server 
+from urllib.parse import parse_qs
 
 
 PORT = 2453 #Some Random port numbers
@@ -7,11 +8,11 @@ class PySpoyServer(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         site = ""
         if(self.path[0] == "/"):
-            index = self.path.find("code=")
-            if index != -1:
-                code=self.path[index+5:]
+            payload = parse_qs(self.path)
+            if "/?code" in payload and "state"in payload:
                 with open(FILE, "w") as f:
-                    f.write(code)
+                    f.write(payload["/?code"][0])
+                    #f.write(payload["state"][0])
                 site = "You can close this window"
                 self.send_response(200)
 
