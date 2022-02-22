@@ -177,25 +177,29 @@ class PySpoy():
         self.key_control.release(keyboard.Key.media_previous)
         pass
 
-    def press_comb(self, key, binding : str):
-        #TODO: Just add it, if it is in any of the bindings
-        if key not in self.cur_key:
-            self.cur_key.add(key)
+    def press_comb(self, binding : str):
         for combo in self.keybind[binding][0]:
             if combo.intersection(self.cur_key) == combo:
                 return self.keybind[binding][1]
 
     def on_press(self, key):
+        #Clear pressed down keys after 5000ms (This is a temp fix for missed released keys)
+        if self.last_click is not None and self.last_click + 2 < time.time():
+            self.last_click = time.time()
+            self.cur_key.clear()
          #Fix for some keyboards
         if(key.__str__() == "<65027>"):
             key = keyboard.Key.alt_gr
-    
-        #print("The key:", key.__str__())
-        #print("Keys pressed down: ", key, self.cur_key)
+
+        if key not in self.cur_key:
+            self.cur_key.add(key)
+        print("Keys pressed down:",self.cur_key)
         for keyShort in self.keybind:
-            func = self.press_comb(key, keyShort)
+            func = self.press_comb(keyShort)
             if func is not None:
                 self.run_on_release.add(func)
+
+
         return self.listen_key
     
     def on_release(self, key):
@@ -212,6 +216,8 @@ class PySpoy():
                 func()
             self.run_on_release.clear()
             self.pause_listen = False
+
+        self.last_click = time.time()
         return self.listen_key
 
     def add_key_binding(self, binding, keys : set):
