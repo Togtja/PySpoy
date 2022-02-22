@@ -109,7 +109,6 @@ class PySpoy():
         print("We will be waiting for", expires_in)
         while True:
             time.sleep(expires_in)
-            print("LETS GO")
             expires_in, refresh_token = self.refresh_token(token)
             if expires_in is None:
                 break
@@ -124,14 +123,13 @@ class PySpoy():
             "grant_type": "refresh_token",
             "refresh_token" : token
         }
-        print(self.clientID)
+        self.current_r.headers.clear()
+        self.current_r.headers.update({'Content-type': 'application/x-www-form-urlencoded'})
         res = self.current_r.post("https://accounts.spotify.com/api/token", data=payload)
         res_json = res.json()
-        print(res_json)
         if "error" in res_json:
             print(res_json["error"])
             return 
-        print(res_json)
         self.current_r.headers.update({"Authorization":res_json["token_type"] + " " +  res_json["access_token"]})
         
         refresh_token = None
