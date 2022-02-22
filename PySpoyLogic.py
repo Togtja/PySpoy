@@ -17,18 +17,42 @@ class PySpoy():
         self.run_on_release = set() #The function to run when the keys are released
         self.pause_listen = False
 
+        self.current_r = requests.Session()
+        self.current_r.headers.update({'Content-type': 'application/x-www-form-urlencoded'})
+        auth_code = self.get_access_code()
+        refresh_token, expire = self.get_access_token(auth_code)
 
+        self.refresh_thread = threading.Thread(target=self.refresh_token_t, args=(refresh_token, expire,), daemon=True)
+        self.refresh_thread.start()
+ 
+        #TODO: make UI for this and load from file
+        self.keybind = {"Play/Pause": ([{keyboard.Key.alt_gr, keyboard.Key.ctrl_l, keyboard.Key.up}, {keyboard.Key.alt_gr, keyboard.Key.up}, {keyboard.Key.alt_r, keyboard.Key.ctrl_l, keyboard.Key.up}, {keyboard.Key.alt, keyboard.Key.ctrl, keyboard.Key.up}], self.playPause),
+        "PreviousTrack": ([{keyboard.Key.alt_gr, keyboard.Key.ctrl_l, keyboard.Key.left}, {keyboard.Key.alt_gr, keyboard.Key.left}, {keyboard.Key.alt_r, keyboard.Key.ctrl_l, keyboard.Key.left}, {keyboard.Key.alt, keyboard.Key.ctrl, keyboard.Key.left}], self.prev_song), 
+        "SkipTrack": ([{keyboard.Key.alt_gr, keyboard.Key.ctrl_l, keyboard.Key.right}, {keyboard.Key.alt_gr, keyboard.Key.right}, {keyboard.Key.alt_r, keyboard.Key.ctrl_l, keyboard.Key.right}, {keyboard.Key.alt, keyboard.Key.ctrl, keyboard.Key.right}], self.skip_song), 
+        "Quit": ([{keyboard.Key.shift, keyboard.Key.esc}], self.quit)}
+
+        self.cur_key = set()
+        with keyboard.Listener(on_press=self.on_press, on_release=self.on_release) as l1:
+            try:
+                l1.join()
+            except Exception as e:
+                print("Exception", e)
+
+    def b64encodeString(self, string):
+        return base64.urlsafe_b64encode(string.encode('ascii')).decode('ascii').replace("=", "")
+
+    def get_access_code(self):
         self.player_url = "https://api.spotify.com/v1/me/player/"
         with open(".config") as conf_file:
             self.clientID = conf_file.read()
         
-        self.current_r = requests.Session()
         self.redirect = "http://localhost:"+ str(webserver.PORT)
         self.access = "user-modify-playback-state user-read-currently-playing user-read-playback-state"
         
         self.state = "".join(random.choices(ascii_letters, k=16))
         self.verifier = "".join(random.choices("QWERTYUIOPASDFGHJKLZXCVBNMqwertyuiopasdfghjklzxcvbnm0123456789-._~", k=random.randint(43,128)))
-        self.challenge = base64.b64encode(hashlib.sha256(self.verifier.encode()).digest()).decode("ascii").replace("=","").replace("+","-").replace("/","_")
+        self.challenge = base64.urlsafe_b64encode(hashlib.sha256(self.verifier.encode()).digest()).decode("ascii").replace("=", "")
+        print(self.challenge)
         payload_auth_req = {
             "response_type": 'code',
             "client_id": self.clientID,
@@ -57,71 +81,87 @@ class PySpoy():
                 #TODO: Give a good error to user!
                 break
         with open(webserver.FILE, "r") as f:
-            self.authToken = f.read()
+            authToken = f.read()
         os.remove(webserver.FILE)
         webserver.closeServer()
-        
-        self.get_access_token()
- 
-        #TODO: make UI for this and load from file
-        self.keybind = {"Play/Pause": ([{keyboard.Key.alt_gr, keyboard.Key.ctrl_l, keyboard.Key.up}, {keyboard.Key.alt_gr, keyboard.Key.up}, {keyboard.Key.alt_r, keyboard.Key.ctrl_l, keyboard.Key.up}, {keyboard.Key.alt, keyboard.Key.ctrl, keyboard.Key.up}], self.playPause),
-        "PreviousTrack": ([{keyboard.Key.alt_gr, keyboard.Key.ctrl_l, keyboard.Key.left}, {keyboard.Key.alt_gr, keyboard.Key.left}, {keyboard.Key.alt_r, keyboard.Key.ctrl_l, keyboard.Key.left}, {keyboard.Key.alt, keyboard.Key.ctrl, keyboard.Key.left}], self.prev_song), 
-        "SkipTrack": ([{keyboard.Key.alt_gr, keyboard.Key.ctrl_l, keyboard.Key.right}, {keyboard.Key.alt_gr, keyboard.Key.right}, {keyboard.Key.alt_r, keyboard.Key.ctrl_l, keyboard.Key.right}, {keyboard.Key.alt, keyboard.Key.ctrl, keyboard.Key.right}], self.skip_song), 
-        "Quit": ([{keyboard.Key.shift, keyboard.Key.esc}], self.quit)}
+        return authToken
 
-        self.cur_key = set()
-        with keyboard.Listener(on_press=self.on_press, on_release=self.on_release) as l1:
-            try:
-                l1.join()
-            except Exception as e:
-                print("Exception", e)
-
-    #TODO: Send clientID and secret as encoded64 
-    
-    def get_access_token(self):
+    def get_access_token(self, code):
+        """Warning Run get_access_code before
+        """
         payload = {
             "grant_type": "authorization_code",
-            "code": self.authToken,
+            "code": code,
             "redirect_uri" : self.redirect,
             "client_id":     self.clientID,
             "code_verifier": self.verifier
         }
+        print("client_id",     self.clientID)
+        res = self.current_r.post("https://accounts.spotify.com/api/token", data=payload)
+        res_json = res.json()
+        if "error" in res_json:
+            print(res_json["error"])
+            return
+        self.current_r.headers.update({"Authorization":res_json["token_type"] + " " +  res_json["access_token"]})
+        return res_json["refresh_token"], res_json["expires_in"]
 
+    def refresh_token_t(self, token, expires_in):
+        print("We will be waiting for", expires_in)
+        while True:
+            time.sleep(expires_in)
+            print("LETS GO")
+            expires_in, refresh_token = self.refresh_token(token)
+            if expires_in is None:
+                break
+            if refresh_token is not None:
+                token = refresh_token
+
+
+    def refresh_token(self, token):
+        print("refreshing token")
+        payload = {
+            "client_id": self.clientID,
+            "grant_type": "refresh_token",
+            "refresh_token" : token
+        }
+        print(self.clientID)
         res = self.current_r.post("https://accounts.spotify.com/api/token", data=payload)
         res_json = res.json()
         print(res_json)
         if "error" in res_json:
             print(res_json["error"])
-            return
-        self.access_token = res_json["access_token"]
-        self.token_timer = res_json["expires_in"]
-        self.token_type = res_json["token_type"]
-        self.authToken = res_json["refresh_token"] #Set the authtoken to be the refresh token
-        self.current_r.headers.update({"Authorization":self.token_type + " " +  self.access_token})
+            return 
+        print(res_json)
+        self.current_r.headers.update({"Authorization":res_json["token_type"] + " " +  res_json["access_token"]})
+        
+        refresh_token = None
+        if "refresh_token" in res_json:
+            refresh_token = res_json["refresh_token"]
+        return res_json["expires_in"], refresh_token
 
     def quit(self):
         self.listen_key = False
                
     #TODO: Find a better way to know if state is play or pause, to minimize calls
     def playPause(self):
-        self.key_control.press(keyboard.Key.media_play_pause)
-        self.key_control.release(keyboard.Key.media_play_pause)
-        """
+        #self.key_control.press(keyboard.Key.media_play_pause)
+        #self.key_control.release(keyboard.Key.media_play_pause)
         playing = self.is_playing()
         if(playing == None):
             print("Failed to get 200 response from 'is_playing'")
             return
         if(playing):
             code = self.current_r.put(url=self.player_url+"pause")
-            print("pause code:", code.status_code)
+            print("pause return code:", code.status_code)
         else:
             code = self.current_r.put(url=self.player_url+"play")
-            print("play code: ", code.status_code)
+            print("play return code: ", code.status_code)
+        """
         """
 
     def is_playing(self):
         code = self.current_r.get(self.player_url+"currently-playing")
-        print("is_playing:", code.status_code)
+        print("is_playing return code:", code.status_code)
         res = None
         if(code.status_code == 200):
             res = code.json()["is_playing"]
@@ -144,8 +184,7 @@ class PySpoy():
         if key not in self.cur_key:
             self.cur_key.add(key)
         for combo in self.keybind[binding][0]:
-            #TODO: Use intersection to fix bug where a key randomly get stuck in the set
-            if (combo == self.cur_key):
+            if combo.intersection(self.cur_key) == combo:
                 return self.keybind[binding][1]
 
     def on_press(self, key):
@@ -153,8 +192,8 @@ class PySpoy():
         if(key.__str__() == "<65027>"):
             key = keyboard.Key.alt_gr
     
-        print("The key:", key.__str__())
-        print("Keys pressed down: ", key, self.cur_key)
+        #print("The key:", key.__str__())
+        #print("Keys pressed down: ", key, self.cur_key)
         for keyShort in self.keybind:
             func = self.press_comb(key, keyShort)
             if func is not None:
@@ -171,7 +210,6 @@ class PySpoy():
         
         if len(self.run_on_release) > 0 and len(self.cur_key) == 0:
             self.pause_listen = True
-            print("Running func")
             for func in self.run_on_release:
                 func()
             self.run_on_release.clear()
