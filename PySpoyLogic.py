@@ -11,12 +11,13 @@ import PySpoyWebserver as webserver# Own lib
 class PySpoy():
     def __init__(self):
         self.listen_key = True
-        
+        self.last_click = None
 
         self.key_control = keyboard.Controller()
         self.run_on_release = set() #The function to run when the keys are released
         self.pause_listen = False
 
+        """
         self.current_r = requests.Session()
         self.current_r.headers.update({'Content-type': 'application/x-www-form-urlencoded'})
         auth_code = self.get_access_code()
@@ -24,12 +25,13 @@ class PySpoy():
 
         self.refresh_thread = threading.Thread(target=self.refresh_token_t, args=(refresh_token, expire,), daemon=True)
         self.refresh_thread.start()
- 
+        """
         #TODO: make UI for this and load from file
         self.keybind = {"Play/Pause": ([{keyboard.Key.alt_gr, keyboard.Key.ctrl_l, keyboard.Key.up}, {keyboard.Key.alt_gr, keyboard.Key.up}, {keyboard.Key.alt_r, keyboard.Key.ctrl_l, keyboard.Key.up}, {keyboard.Key.alt, keyboard.Key.ctrl, keyboard.Key.up}], self.playPause),
         "PreviousTrack": ([{keyboard.Key.alt_gr, keyboard.Key.ctrl_l, keyboard.Key.left}, {keyboard.Key.alt_gr, keyboard.Key.left}, {keyboard.Key.alt_r, keyboard.Key.ctrl_l, keyboard.Key.left}, {keyboard.Key.alt, keyboard.Key.ctrl, keyboard.Key.left}], self.prev_song), 
         "SkipTrack": ([{keyboard.Key.alt_gr, keyboard.Key.ctrl_l, keyboard.Key.right}, {keyboard.Key.alt_gr, keyboard.Key.right}, {keyboard.Key.alt_r, keyboard.Key.ctrl_l, keyboard.Key.right}, {keyboard.Key.alt, keyboard.Key.ctrl, keyboard.Key.right}], self.skip_song), 
         "Quit": ([{keyboard.Key.shift, keyboard.Key.esc}], self.quit)}
+
 
         self.cur_key = set()
         with keyboard.Listener(on_press=self.on_press, on_release=self.on_release) as l1:
@@ -79,7 +81,7 @@ class PySpoy():
             timeout -= 1
             if timeout < 0:
                 #TODO: Give a good error to user!
-                break
+                return
         with open(webserver.FILE, "r") as f:
             authToken = f.read()
         os.remove(webserver.FILE)
@@ -96,7 +98,6 @@ class PySpoy():
             "client_id":     self.clientID,
             "code_verifier": self.verifier
         }
-        print("client_id",     self.clientID)
         res = self.current_r.post("https://accounts.spotify.com/api/token", data=payload)
         res_json = res.json()
         if "error" in res_json:
@@ -142,8 +143,9 @@ class PySpoy():
                
     #TODO: Find a better way to know if state is play or pause, to minimize calls
     def playPause(self):
-        #self.key_control.press(keyboard.Key.media_play_pause)
-        #self.key_control.release(keyboard.Key.media_play_pause)
+        self.key_control.press(keyboard.Key.media_play_pause)
+        self.key_control.release(keyboard.Key.media_play_pause)
+        """
         playing = self.is_playing()
         if(playing == None):
             print("Failed to get 200 response from 'is_playing'")
@@ -154,7 +156,6 @@ class PySpoy():
         else:
             code = self.current_r.put(url=self.player_url+"play")
             print("play return code: ", code.status_code)
-        """
         """
 
     def is_playing(self):
